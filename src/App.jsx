@@ -75,21 +75,16 @@ const PLAYOFF_SEED = [
 function fullName(name){ return TEAM_META[name]?.full || name }
 function shortName(name){ return TEAM_META[name]?.short || name }
 function teamLogo(name){ return TEAM_META[name]?.logo || '' }
+function isRocketsLakersSeries(matchup){ const set = new Set([matchup.team_a, matchup.team_b]); return set.has('Rockets') && set.has('Lakers') }
 
 function TeamBadge({ name, small=false }) {
   const logo = teamLogo(name)
-  const rockets = name === 'Rockets'
   return (
     <span className={`teamBadge ${small ? 'small' : ''}`}>
-      {logo ? <img src={logo} alt={name} className={`teamLogo ${rockets ? 'rocketsLogo' : ''}`} /> : <span className="teamLogoPlaceholder" />}
+      {logo ? <img src={logo} alt={name} className={`teamLogo ${name === 'Rockets' ? 'rocketsLogo' : ''}`} /> : <span className="teamLogoPlaceholder" />}
       <span>{fullName(name)}</span>
     </span>
   )
-}
-
-function isRocketsLakersSeries(matchup){
-  const set = new Set([matchup.team_a, matchup.team_b])
-  return set.has('Rockets') && set.has('Lakers')
 }
 
 function fmt(iso){
@@ -142,10 +137,18 @@ function sortGamesForDisplay(items){
   return [...items].sort((a, b) => {
     const aFinished = !!a.actual_winner
     const bFinished = !!b.actual_winner
-    if (aFinished !== bFinished) return aFinished ? 1 : -1
+
+    if (aFinished !== bFinished) {
+      return aFinished ? 1 : -1
+    }
+
     const ta = a.starts_at ? new Date(a.starts_at).getTime() : Number.MAX_SAFE_INTEGER
     const tb = b.starts_at ? new Date(b.starts_at).getTime() : Number.MAX_SAFE_INTEGER
-    if (!aFinished && !bFinished) return ta - tb
+
+    if (!aFinished && !bFinished) {
+      return ta - tb
+    }
+
     return tb - ta
   })
 }
@@ -170,11 +173,12 @@ export default function App(){
 
   const [editingMatchupId,setEditingMatchupId] = useState(null)
   const [editingGameId,setEditingGameId] = useState(null)
+  const [expandedSeriesGames,setExpandedSeriesGames] = useState({})
   const [expandedOthers,setExpandedOthers] = useState({})
+  const [easterEgg,setEasterEgg] = useState('')
   const [seriesResultState,setSeriesResultState] = useState({})
   const [gameResultState,setGameResultState] = useState({})
   const [seriesDrafts,setSeriesDrafts] = useState({})
-  const [easterEgg,setEasterEgg] = useState('')
 
   const [adminForm,setAdminForm] = useState({
     stage:'Playoffs',
@@ -203,12 +207,6 @@ export default function App(){
     return () => clearTimeout(t)
   }, [easterEgg])
 
-  function triggerEgg(team, matchup){
-    if (!isRocketsLakersSeries(matchup)) return
-    if (team === 'Rockets') setEasterEgg('🚀 火箭升空')
-    if (team === 'Lakers') setEasterEgg('👑 湖人加冕')
-  }
-
   async function loadAll(){
     setMsg('')
     const [m,g,sp,gp] = await Promise.all([
@@ -223,6 +221,13 @@ export default function App(){
     setGames(g.data || [])
     setSeriesPicks(sp.data || [])
     setGamePicks(gp.data || [])
+  }
+
+
+  function triggerEgg(team, matchup){
+    if (!isRocketsLakersSeries(matchup)) return
+    if (team === 'Rockets') setEasterEgg('🚀 火箭升空')
+    if (team === 'Lakers') setEasterEgg('👑 湖人加冕')
   }
 
   async function seedPlayIn(){
@@ -300,7 +305,7 @@ export default function App(){
     if(!window.confirm(`删除 ${fullName(matchup.team_a)} vs ${fullName(matchup.team_b)}？`)) return
     const { error } = await supabase.from('matchups').delete().eq('pool',pool).eq('matchup_id',matchup.matchup_id)
     if(error) return setMsg(error.message)
-    triggerEgg(winner, matchup)
+    if (matchup) triggerEgg(winner, matchup)
     loadAll()
   }
 
@@ -308,7 +313,6 @@ export default function App(){
     if(!window.confirm(`删除 ${game.label}？`)) return
     const { error } = await supabase.from('games').delete().eq('pool',pool).eq('id',game.id)
     if(error) return setMsg(error.message)
-    triggerEgg(draft.winner, matchup)
     loadAll()
   }
 
@@ -371,7 +375,6 @@ export default function App(){
       pool, game_id:game.id, nickname:nickname.trim(), picked_winner:winner
     }, { onConflict:'pool,game_id,nickname' })
     if(error) return setMsg(error.message)
-    triggerEgg(winner, matchup)
     loadAll()
   }
 
@@ -470,63 +473,42 @@ export default function App(){
     return Array.from(s).sort((a,b)=>a.localeCompare(b))
   },[seriesPicks,gamePicks])
 
-const leaderboard = useMemo(() => {
-  const score = {}
+  const leaderboard = useMemo(()=>{
+    const score={}
+    const add=(name,pts)=>{ score[name]=(score[name]||0)+pts }
 
-  const allNicknames = new Set()
-  seriesPicks.forEach((p) => allNicknames.add(p.nickname))
-  gamePicks.forEach((p) => allNicknames.add(p.nickname))
-
-  allNicknames.forEach((name) => {
-    score[name] = 0
-  })
-
-  const add = (name, pts) => {
-    score[name] = (score[name] || 0) + pts
-  }
-
-  gamePicks.forEach((p) => {
-    const g = games.find((x) => x.id === p.game_id)
-    if (!g?.actual_winner) return
-    const m = matchups.find((x) => x.matchup_id === g.matchup_id)
-    if (p.picked_winner === g.actual_winner) {
-      add(p.nickname, m?.stage === 'Play-In' ? 3 : 1)
-    }
-  })
-
-  seriesPicks.forEach((p) => {
-    const m = matchups.find((x) => x.matchup_id === p.matchup_id)
-    if (!m || m.stage !== 'Playoffs' || !m.actual_winner) return
-    if (p.picked_winner === m.actual_winner) {
-      add(p.nickname, 3)
-      if (m.actual_score_a != null && m.actual_score_b != null) {
-        const display = seriesScoreTextForDisplay(p, m)
-        const actual =
-          m.actual_winner === m.team_a
-            ? `${m.actual_score_a}:${m.actual_score_b}`
-            : `${m.actual_score_b}:${m.actual_score_a}`
-        if (display === actual) add(p.nickname, 5)
+    gamePicks.forEach(p=>{
+      const g = games.find(x=>x.id===p.game_id)
+      if(!g?.actual_winner) return
+      const m = matchups.find(x=>x.matchup_id===g.matchup_id)
+      if(p.picked_winner === g.actual_winner){
+        add(p.nickname, m?.stage==='Play-In' ? 3 : 1)
       }
-    }
-  })
+    })
 
-  const rows = Object.entries(score)
-    .map(([nickname, score]) => ({ nickname, score }))
-    .sort((a, b) => b.score - a.score || a.nickname.localeCompare(b.nickname))
+    seriesPicks.forEach(p=>{
+      const m = matchups.find(x=>x.matchup_id===p.matchup_id)
+      if(!m || m.stage!=='Playoffs' || !m.actual_winner) return
+      if(p.picked_winner === m.actual_winner){
+        add(p.nickname,3)
+        if(m.actual_score_a != null && m.actual_score_b != null){
+          const display = seriesScoreTextForDisplay(p,m)
+          const actual = m.actual_winner===m.team_a ? `${m.actual_score_a}:${m.actual_score_b}` : `${m.actual_score_b}:${m.actual_score_a}`
+          if(display === actual) add(p.nickname,5)
+        }
+      }
+    })
 
-  return rows.map((row, i) => {
-    let rankNumber = 1
-    for (let j = 0; j < i; j++) {
-      if (rows[j].score > row.score) rankNumber += 1
-    }
-
-    let rankLabel = String(rankNumber)
-    if (i === 0) rankLabel = '👑'
-    if (i === rows.length - 1) rankLabel = 'win a real predict'
-
-    return { ...row, rankLabel, isMine: row.nickname === nickname }
-  })
-}, [seriesPicks, gamePicks, games, matchups, nickname])
+    const rows = Object.entries(score).map(([nickname,score])=>({nickname,score})).sort((a,b)=>b.score-a.score || a.nickname.localeCompare(b.nickname))
+    return rows.map((row,i)=>{
+      let rankNumber = 1
+      for(let j=0;j<i;j++){ if(rows[j].score > row.score) rankNumber += 1 }
+      let rankLabel = String(rankNumber)
+      if(i===0) rankLabel='👑'
+      if(i===rows.length-1) rankLabel='win a real predict'
+      return {...row, rankLabel, isMine:row.nickname===nickname}
+    })
+  },[seriesPicks,gamePicks,games,matchups,nickname])
 
   return (
     <div className="page">
@@ -760,6 +742,7 @@ const leaderboard = useMemo(() => {
                           )
                         })
                       )}
+
                     </div>
 
                     {adminReady && (
@@ -805,15 +788,14 @@ const leaderboard = useMemo(() => {
                     ))}
                   </section>
                 )}
-
                 {m.matchup_type==='series' && (
                   <section className="block">
-                    <div className="blockTitle">小场</div>
                     <div className="games">
                       {matchupGames.length===0 ? <div className="muted">还没有小场</div> : matchupGames.map(g=>(
                         <GameCard
                           key={g.id}
                           g={g}
+                          matchup={m}
                           nickname={nickname}
                           allGamePicks={gamePicks.filter(x=>x.game_id===g.id).sort((a,b)=>(a.nickname===nickname?-1:b.nickname===nickname?1:a.nickname.localeCompare(b.nickname)))}
                           adminReady={adminReady}
@@ -826,6 +808,8 @@ const leaderboard = useMemo(() => {
                           gameResultState={gameResultState}
                           setGameResultState={setGameResultState}
                           updateGameResult={updateGameResult}
+                          expandedOthers={expandedOthers}
+                          setExpandedOthers={setExpandedOthers}
                         />
                       ))}
                     </div>
@@ -846,12 +830,12 @@ function GameCard({
   deleteGame, saveGamePick, gameResultState, setGameResultState, updateGameResult, expandedOthers, setExpandedOthers
 }){
   const gameResult = gameResultState[g.id] || { winner:g.actual_winner || g.team_b, score_a:g.score_a ?? '', score_b:g.score_b ?? '' }
-  const myPick = allGamePicks.find(p => p.nickname===nickname)
-  const others = allGamePicks.filter(p => p.nickname!==nickname)
+  const myPick = allGamePicks.find(p => p.nickname === nickname)
+  const others = allGamePicks.filter(p => p.nickname !== nickname)
   const opened = !!expandedOthers[g.id]
 
   return (
-    <div className="gameCard compactGameCard">
+    <div className="gameCard compactGame">
       <div className="compactTop">
         <div className="gameLabel">{g.label}</div>
         <div className="compactStatus">{g.actual_winner ? '已结束' : fmt(g.starts_at)}</div>
@@ -860,12 +844,10 @@ function GameCard({
       <div className="compactTeams">
         <div className="compactTeam">{shortName(g.team_a)} {g.score_a != null ? g.score_a : '-'}</div>
         <div className="gameVs">vs</div>
-        <div className="compactTeam rightAlign">{g.score_b != null ? g.score_b : '-'} {shortName(g.team_b)}</div>
+        <div className="compactTeam right">{g.score_b != null ? g.score_b : '-'} {shortName(g.team_b)}</div>
       </div>
 
-      <div className="compactMine">
-        你：{myPick ? shortName(myPick.picked_winner) : '还没预测'}
-      </div>
+      <div className="compactMine">你：{myPick ? shortName(myPick.picked_winner) : '还没预测'}</div>
 
       {!g.actual_winner && (
         <div className="pickButtons compactButtons">
@@ -884,11 +866,7 @@ function GameCard({
               {others.map(p=>{
                 const isCorrect = g.actual_winner && p.picked_winner===g.actual_winner
                 const isWrong = g.actual_winner && p.picked_winner!==g.actual_winner
-                return (
-                  <div key={`${g.id}-${p.nickname}`} className={lineClass(false,isCorrect,isWrong)}>
-                    {p.nickname}：{shortName(p.picked_winner)}
-                  </div>
-                )
+                return <div key={`${g.id}-${p.nickname}`} className={lineClass(false,isCorrect,isWrong)}>{p.nickname}：{shortName(p.picked_winner)}</div>
               })}
             </div>
           )}
@@ -915,7 +893,7 @@ function GameCard({
               <select value={g.team_b} onChange={e=>setGames(prev=>prev.map(x=>x.id===g.id?{...x,team_b:e.target.value}:x))}>
                 {Object.keys(TEAM_META).map(team=><option key={team} value={team}>主队（右）· {fullName(team)}</option>)}
               </select>
-              <input type="datetime-local" value={toDatetimeLocalValue(g.starts_at)} onChange={e=>setGames(prev=>prev.map(x=>x.id===g.id?{...x,starts_at:fromDatetimeLocalValue(e.target.value)}:x))} />
+              <input type="datetime-local" value={toLocal(g.starts_at)} onChange={e=>setGames(prev=>prev.map(x=>x.id===g.id?{...x,starts_at:fromLocal(e.target.value)}:x))} />
               <div className="row wrap">
                 <button className="tiny" onClick={()=>saveGameEdit(g)}>保存本场修改</button>
                 <button className="tiny subtle" onClick={()=>setEditingGameId(null)}>取消</button>
