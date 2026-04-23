@@ -100,14 +100,14 @@ button,input,select{font:inherit}
 @keyframes rocketsShake{0%,100%{transform:translateY(0)}25%{transform:translateY(-1px) translateX(.5px)}50%{transform:translateY(-2px)}75%{transform:translateY(-1px) translateX(-.5px)}}
 .eggToast{position:fixed;right:16px;bottom:18px;z-index:99;background:#111827;color:#fff;padding:12px 16px;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.25);font-weight:700;animation:eggPop .18s ease-out}
 @keyframes eggPop{from{transform:translateY(8px);opacity:0}to{transform:translateY(0);opacity:1}}
-.compactGame{padding:10px 12px}
+.compactGameCard{padding:10px 12px}
 .compactTop{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
 .compactTeams{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;margin-bottom:6px;font-size:14px}
 .compactTeam{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.compactTeam.right{text-align:right}
-.compactStatus{color:#6b7280;font-size:12px}
+.rightAlign{text-align:right}
+.compactStatus{color:var(--muted);font-size:12px}
 .compactMine{font-size:13px;margin-bottom:6px}
-.compactButtons .btn{min-height:36px;padding:7px 10px}
+.compactButtons{margin-bottom:6px}
 .othersToggle{font-size:13px;color:#374151;cursor:pointer;background:none;border:none;padding:0}
 .othersWrap{margin-top:6px}
 .compactMuted{font-size:13px}
