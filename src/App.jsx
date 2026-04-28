@@ -75,13 +75,13 @@ const PLAYOFF_SEED = [
 function fullName(name){ return TEAM_META[name]?.full || name }
 function shortName(name){ return TEAM_META[name]?.short || name }
 function teamLogo(name){ return TEAM_META[name]?.logo || '' }
-function isRocketsLakersSeries(matchup){ const set = new Set([matchup.team_a, matchup.team_b]); return set.has('Rockets') && set.has('Lakers') }
 
 function TeamBadge({ name, small=false }) {
   const logo = teamLogo(name)
+  const rockets = name === 'Rockets'
   return (
     <span className={`teamBadge ${small ? 'small' : ''}`}>
-      {logo ? <img src={logo} alt={name} className={`teamLogo ${name === 'Rockets' ? 'rocketsLogo' : ''}`} /> : <span className="teamLogoPlaceholder" />}
+      {logo ? <img src={logo} alt={name} className={`teamLogo ${rockets ? 'rocketsLogo' : ''}`} /> : <span className="teamLogoPlaceholder" />}
       <span>{fullName(name)}</span>
     </span>
   )
@@ -174,11 +174,11 @@ export default function App(){
   const [editingMatchupId,setEditingMatchupId] = useState(null)
   const [editingGameId,setEditingGameId] = useState(null)
   const [expandedSeriesGames,setExpandedSeriesGames] = useState({})
-  const [expandedOthers,setExpandedOthers] = useState({})
-  const [easterEgg,setEasterEgg] = useState('')
   const [seriesResultState,setSeriesResultState] = useState({})
   const [gameResultState,setGameResultState] = useState({})
   const [seriesDrafts,setSeriesDrafts] = useState({})
+  const [expandedOthers, setExpandedOthers] = useState({})
+  const [easterEgg, setEasterEgg] = useState('')
 
   const [adminForm,setAdminForm] = useState({
     stage:'Playoffs',
@@ -201,11 +201,21 @@ export default function App(){
 
   useEffect(()=>{ loadAll() },[pool])
 
+
   useEffect(() => {
     if (!easterEgg) return
     const t = setTimeout(() => setEasterEgg(''), 1400)
     return () => clearTimeout(t)
   }, [easterEgg])
+
+  function triggerEgg(team, matchup){
+    if (!matchup) return
+    const set = new Set([matchup.team_a, matchup.team_b])
+    const rl = set.has('Rockets') && set.has('Lakers')
+    if (!rl) return
+    if (team === 'Rockets') setEasterEgg('🚀 火箭升空')
+    if (team === 'Lakers') setEasterEgg('👑 湖人加冕')
+  }
 
   async function loadAll(){
     setMsg('')
@@ -221,13 +231,6 @@ export default function App(){
     setGames(g.data || [])
     setSeriesPicks(sp.data || [])
     setGamePicks(gp.data || [])
-  }
-
-
-  function triggerEgg(team, matchup){
-    if (!isRocketsLakersSeries(matchup)) return
-    if (team === 'Rockets') setEasterEgg('🚀 火箭升空')
-    if (team === 'Lakers') setEasterEgg('👑 湖人加冕')
   }
 
   async function seedPlayIn(){
@@ -305,7 +308,7 @@ export default function App(){
     if(!window.confirm(`删除 ${fullName(matchup.team_a)} vs ${fullName(matchup.team_b)}？`)) return
     const { error } = await supabase.from('matchups').delete().eq('pool',pool).eq('matchup_id',matchup.matchup_id)
     if(error) return setMsg(error.message)
-    if (matchup) triggerEgg(winner, matchup)
+    triggerEgg(winner, matchup)
     loadAll()
   }
 
@@ -475,6 +478,7 @@ export default function App(){
 
   const leaderboard = useMemo(()=>{
     const score={}
+    nicknamesInPool.forEach(name=>{ score[name]=0 })
     const add=(name,pts)=>{ score[name]=(score[name]||0)+pts }
 
     gamePicks.forEach(p=>{
@@ -742,7 +746,11 @@ export default function App(){
                           )
                         })
                       )}
-
+                      <div className="seriesGamesToggle">
+                        <button className="btn subtle" onClick={()=>setExpandedSeriesGames(prev=>({...prev,[m.matchup_id]:!prev[m.matchup_id]}))}>
+                          {expandedSeriesGames[m.matchup_id] ? '收起小场' : '展开小场'}
+                        </button>
+                      </div>
                     </div>
 
                     {adminReady && (
@@ -788,14 +796,15 @@ export default function App(){
                     ))}
                   </section>
                 )}
-                {m.matchup_type==='series' && (
+
+                {m.matchup_type==='series' && expandedSeriesGames[m.matchup_id] && (
                   <section className="block">
+                    <div className="blockTitle">小场</div>
                     <div className="games">
                       {matchupGames.length===0 ? <div className="muted">还没有小场</div> : matchupGames.map(g=>(
                         <GameCard
                           key={g.id}
                           g={g}
-                          matchup={m}
                           nickname={nickname}
                           allGamePicks={gamePicks.filter(x=>x.game_id===g.id).sort((a,b)=>(a.nickname===nickname?-1:b.nickname===nickname?1:a.nickname.localeCompare(b.nickname)))}
                           adminReady={adminReady}
@@ -808,8 +817,6 @@ export default function App(){
                           gameResultState={gameResultState}
                           setGameResultState={setGameResultState}
                           updateGameResult={updateGameResult}
-                          expandedOthers={expandedOthers}
-                          setExpandedOthers={setExpandedOthers}
                         />
                       ))}
                     </div>
@@ -871,9 +878,7 @@ function GameCard({
             </div>
           )}
         </>
-      ) : (
-        <div className="muted compactMuted">还没有其他人预测</div>
-      )}
+      ) : <div className="muted compactMuted">还没有其他人预测</div>}
 
       {adminReady && (
         <div className="adminResultBox stacked">
@@ -893,7 +898,7 @@ function GameCard({
               <select value={g.team_b} onChange={e=>setGames(prev=>prev.map(x=>x.id===g.id?{...x,team_b:e.target.value}:x))}>
                 {Object.keys(TEAM_META).map(team=><option key={team} value={team}>主队（右）· {fullName(team)}</option>)}
               </select>
-              <input type="datetime-local" value={toLocal(g.starts_at)} onChange={e=>setGames(prev=>prev.map(x=>x.id===g.id?{...x,starts_at:fromLocal(e.target.value)}:x))} />
+              <input type="datetime-local" value={toDatetimeLocalValue(g.starts_at)} onChange={e=>setGames(prev=>prev.map(x=>x.id===g.id?{...x,starts_at:fromDatetimeLocalValue(e.target.value)}:x))} />
               <div className="row wrap">
                 <button className="tiny" onClick={()=>saveGameEdit(g)}>保存本场修改</button>
                 <button className="tiny subtle" onClick={()=>setEditingGameId(null)}>取消</button>
