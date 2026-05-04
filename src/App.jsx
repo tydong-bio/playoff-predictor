@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from './lib.supabase'
 
 const ADMIN_PASSWORD = 'nba-admin'
-const STAGES = ['Second Round', 'First Round', 'Play-In']
+const STAGES = ['Round 2', 'Round 1', 'Play-In']
 const CONFS = ['East', 'West']
 const SCORE_OPTIONS = ['4:0', '4:1', '4:2', '4:3']
 
@@ -75,12 +75,13 @@ const PLAYOFF_SEED = [
 function fullName(name){ return TEAM_META[name]?.full || name }
 function shortName(name){ return TEAM_META[name]?.short || name }
 function teamLogo(name){ return TEAM_META[name]?.logo || '' }
+function isRocketsLakersSeries(matchup){ const set = new Set([matchup.team_a, matchup.team_b]); return set.has('Rockets') && set.has('Lakers') }
 
 function TeamBadge({ name, small=false }) {
   const logo = teamLogo(name)
   return (
     <span className={`teamBadge ${small ? 'small' : ''}`}>
-      {logo ? <img src={logo} alt={name} className="teamLogo" /> : <span className="teamLogoPlaceholder" />}
+      {logo ? <img src={logo} alt={name} className={`teamLogo ${name === 'Rockets' ? 'rocketsLogo' : ''}`} /> : <span className="teamLogoPlaceholder" />}
       <span>{fullName(name)}</span>
     </span>
   )
@@ -158,7 +159,7 @@ export default function App(){
 
   const [pool,setPool] = useState(initialPool)
   const [nickname,setNickname] = useState(localStorage.getItem('pp_nickname') || '')
-  const [stage,setStage] = useState('Second Round')
+  const [stage,setStage] = useState('Round 2')
   const [conference,setConference] = useState('East')
   const [msg,setMsg] = useState('')
   const [adminOpen,setAdminOpen] = useState(false)
@@ -172,6 +173,9 @@ export default function App(){
 
   const [editingMatchupId,setEditingMatchupId] = useState(null)
   const [editingGameId,setEditingGameId] = useState(null)
+  const [expandedSeriesGames,setExpandedSeriesGames] = useState({})
+  const [expandedOthers,setExpandedOthers] = useState({})
+  const [easterEgg,setEasterEgg] = useState('')
   const [seriesResultState,setSeriesResultState] = useState({})
   const [gameResultState,setGameResultState] = useState({})
   const [seriesDrafts,setSeriesDrafts] = useState({})
@@ -197,6 +201,12 @@ export default function App(){
 
   useEffect(()=>{ loadAll() },[pool])
 
+  useEffect(() => {
+    if (!easterEgg) return
+    const t = setTimeout(() => setEasterEgg(''), 1400)
+    return () => clearTimeout(t)
+  }, [easterEgg])
+
   async function loadAll(){
     setMsg('')
     const [m,g,sp,gp] = await Promise.all([
@@ -211,6 +221,13 @@ export default function App(){
     setGames(g.data || [])
     setSeriesPicks(sp.data || [])
     setGamePicks(gp.data || [])
+  }
+
+
+  function triggerEgg(team, matchup){
+    if (!isRocketsLakersSeries(matchup)) return
+    if (team === 'Rockets') setEasterEgg('🚀 火箭升空')
+    if (team === 'Lakers') setEasterEgg('👑 湖人加冕')
   }
 
   async function seedPlayIn(){
@@ -288,6 +305,7 @@ export default function App(){
     if(!window.confirm(`删除 ${fullName(matchup.team_a)} vs ${fullName(matchup.team_b)}？`)) return
     const { error } = await supabase.from('matchups').delete().eq('pool',pool).eq('matchup_id',matchup.matchup_id)
     if(error) return setMsg(error.message)
+    if (matchup) triggerEgg(winner, matchup)
     loadAll()
   }
 
@@ -351,7 +369,7 @@ export default function App(){
     loadAll()
   }
 
-  async function saveGamePick(game, winner){
+  async function saveGamePick(game, winner, matchup){
     if(!nickname.trim()) return setMsg('先填昵称')
     const { error } = await supabase.from('game_picks').upsert({
       pool, game_id:game.id, nickname:nickname.trim(), picked_winner:winner
@@ -377,6 +395,7 @@ export default function App(){
       picked_winner:winner, picked_score_a:null, picked_score_b:null
     }, { onConflict:'pool,matchup_id,nickname' })
     if(error) return setMsg(error.message)
+    triggerEgg(winner, matchup)
     loadAll()
   }
 
@@ -391,6 +410,7 @@ export default function App(){
       picked_winner:draft.winner, picked_score_a:parsed.a, picked_score_b:parsed.b
     }, { onConflict:'pool,matchup_id,nickname' })
     if(error) return setMsg(error.message)
+    triggerEgg(draft.winner, matchup)
     loadAll()
   }
 
@@ -443,9 +463,15 @@ export default function App(){
 
   const visibleMatchups = useMemo(()=>{
     const source = matchups.filter(m => {
-      if (stage === 'Play-In') return m.stage === 'Play-In'
-      if (stage === 'First Round') return m.stage === 'Playoffs' && m.conference === conference && (m.round_label || '').toLowerCase() === 'first round'
-      if (stage === 'Second Round') return m.stage === 'Playoffs' && m.conference === conference && (m.round_label || '').toLowerCase() === 'second round'
+      if (stage === 'Play-In') {
+        return m.stage === 'Play-In'
+      }
+      if (stage === 'Round 1') {
+        return m.stage === 'Playoffs' && m.round_label === 'First Round' && m.conference === conference
+      }
+      if (stage === 'Round 2') {
+        return m.stage === 'Playoffs' && m.round_label === 'Second Round' && m.conference === conference
+      }
       return false
     })
     return sortByTime(source)
@@ -497,7 +523,9 @@ export default function App(){
 
   return (
     <div className="page">
+      {easterEgg && <div className="eggToast">{easterEgg}</div>}
       <div className="container">
+        <div className="siteBanner">火箭加油 · KD加油</div>
         <header className="header">
           <div className="brand">
             <div className="kicker">NBA PREDICTOR</div>
@@ -531,11 +559,11 @@ export default function App(){
           <div className="chipRow">
             {STAGES.map(s=>(
               <button key={s} className={`chip ${stage===s?'active':''}`} onClick={()=>setStage(s)}>
-                {s==='Play-In' ? '附加赛' : (s==='First Round' ? '第一轮' : '第二轮')}
+                {s==='Round 2' ? '第二轮' : s==='Round 1' ? '第一轮' : '附加赛'}
               </button>
             ))}
           </div>
-          {stage!=='Play-In' && (
+          {(stage==='Round 1' || stage==='Round 2') && (
             <div className="chipRow secondRow">
               {CONFS.map(c=>(
                 <button key={c} className={`chip ${conference===c?'active':''}`} onClick={()=>setConference(c)}>
@@ -566,7 +594,7 @@ export default function App(){
               <div className="panelTitle">管理员</div>
               <div className="row wrap">
                 <button className="btn" onClick={seedPlayIn}>加入附加赛</button>
-                <button className="btn" onClick={seedPlayoffs}>加入第一轮占位</button>
+                <button className="btn" onClick={seedPlayoffs}>加入季后赛占位</button>
                 <button className="btn subtle" onClick={clearAllPredictions}>清空当前 pool 所有预测</button>
               </div>
 
@@ -725,7 +753,8 @@ export default function App(){
                           )
                         })
                       )}
-</div>
+
+                    </div>
 
                     {adminReady && (
                       <div className="adminResultBox stacked">
@@ -751,6 +780,7 @@ export default function App(){
                       <GameCard
                         key={g.id}
                         g={g}
+                        matchup={m}
                         nickname={nickname}
                         allGamePicks={gamePicks.filter(x=>x.game_id===g.id).sort((a,b)=>(a.nickname===nickname?-1:b.nickname===nickname?1:a.nickname.localeCompare(b.nickname)))}
                         adminReady={adminReady}
@@ -763,19 +793,20 @@ export default function App(){
                         gameResultState={gameResultState}
                         setGameResultState={setGameResultState}
                         updateGameResult={updateGameResult}
+                        expandedOthers={expandedOthers}
+                        setExpandedOthers={setExpandedOthers}
                       />
                     ))}
                   </section>
                 )}
-
                 {m.matchup_type==='series' && (
                   <section className="block">
-                    <div className="blockTitle">小场</div>
                     <div className="games">
                       {matchupGames.length===0 ? <div className="muted">还没有小场</div> : matchupGames.map(g=>(
                         <GameCard
                           key={g.id}
                           g={g}
+                          matchup={m}
                           nickname={nickname}
                           allGamePicks={gamePicks.filter(x=>x.game_id===g.id).sort((a,b)=>(a.nickname===nickname?-1:b.nickname===nickname?1:a.nickname.localeCompare(b.nickname)))}
                           adminReady={adminReady}
@@ -788,6 +819,8 @@ export default function App(){
                           gameResultState={gameResultState}
                           setGameResultState={setGameResultState}
                           updateGameResult={updateGameResult}
+                          expandedOthers={expandedOthers}
+                          setExpandedOthers={setExpandedOthers}
                         />
                       ))}
                     </div>
@@ -802,91 +835,84 @@ export default function App(){
   )
 }
 
+
 function GameCard({
-  g, nickname, allGamePicks, adminReady, editingGameId, setEditingGameId, setGames, saveGameEdit,
-  deleteGame, saveGamePick, gameResultState, setGameResultState, updateGameResult
+  g, matchup, nickname, allGamePicks, adminReady, editingGameId, setEditingGameId, setGames, saveGameEdit,
+  deleteGame, saveGamePick, gameResultState, setGameResultState, updateGameResult, expandedOthers, setExpandedOthers
 }){
   const gameResult = gameResultState[g.id] || { winner:g.actual_winner || g.team_b, score_a:g.score_a ?? '', score_b:g.score_b ?? '' }
+  const myPick = allGamePicks.find(p => p.nickname === nickname)
+  const others = allGamePicks.filter(p => p.nickname !== nickname)
+  const opened = !!expandedOthers[g.id]
 
   return (
-    <div className="gameCard">
-      <div className="gameTop">
-        <div className="gameHeaderLeft">
-          <div className="gameLabel">{g.label}</div>
-          <div className="time small">{fmt(g.starts_at)}</div>
-        </div>
-        {adminReady && (
-          <div className="row wrap">
-            <button className="tiny subtle" onClick={()=>setEditingGameId(editingGameId===g.id?null:g.id)}>编辑本场</button>
-            <button className="tiny danger" onClick={()=>deleteGame(g)}>删除本场</button>
-          </div>
-        )}
+    <div className="gameCard compactGame">
+      <div className="compactTop">
+        <div className="gameLabel">{g.label}</div>
+        <div className="compactStatus">{g.actual_winner ? '已结束' : fmt(g.starts_at)}</div>
       </div>
 
-      {adminReady && editingGameId===g.id && (
-        <div className="adminResultBox stacked">
-          <div className="miniLabel">编辑本场</div>
-          <div className="editHint">左侧是客队，右侧是主队。</div>
-          <input value={g.label || ''} onChange={e=>setGames(prev=>prev.map(x=>x.id===g.id?{...x,label:e.target.value}:x))} placeholder="标签，比如 G1" />
-          <select value={g.team_a} onChange={e=>setGames(prev=>prev.map(x=>x.id===g.id?{...x,team_a:e.target.value}:x))}>
-            {Object.keys(TEAM_META).map(team=><option key={team} value={team}>客队（左）· {fullName(team)}</option>)}
-          </select>
-          <select value={g.team_b} onChange={e=>setGames(prev=>prev.map(x=>x.id===g.id?{...x,team_b:e.target.value}:x))}>
-            {Object.keys(TEAM_META).map(team=><option key={team} value={team}>主队（右）· {fullName(team)}</option>)}
-          </select>
-          <input type="datetime-local" value={toDatetimeLocalValue(g.starts_at)} onChange={e=>setGames(prev=>prev.map(x=>x.id===g.id?{...x,starts_at:fromDatetimeLocalValue(e.target.value)}:x))} />
-          <div className="row wrap">
-            <button className="tiny" onClick={()=>saveGameEdit(g)}>保存本场修改</button>
-            <button className="tiny subtle" onClick={()=>setEditingGameId(null)}>取消</button>
-          </div>
+      <div className="compactTeams">
+        <div className="compactTeam">{shortName(g.team_a)} {g.score_a != null ? g.score_a : '-'}</div>
+        <div className="gameVs">vs</div>
+        <div className="compactTeam right">{g.score_b != null ? g.score_b : '-'} {shortName(g.team_b)}</div>
+      </div>
+
+      <div className="compactMine">你：{myPick ? shortName(myPick.picked_winner) : '还没预测'}</div>
+
+      {!g.actual_winner && (
+        <div className="pickButtons compactButtons">
+          <button className="btn choice" onClick={()=>saveGamePick(g,g.team_a,matchup)}>客 {shortName(g.team_a)}</button>
+          <button className="btn choice" onClick={()=>saveGamePick(g,g.team_b,matchup)}>主 {shortName(g.team_b)}</button>
         </div>
       )}
 
-      <div className="gameScoreBoard">
-        <div className="gameSide">
-          <TeamBadge name={g.team_a} small />
-          <div className="gameScoreNum">{g.score_a != null ? g.score_a : '-'}</div>
-          <div className="gameHomeAway">客</div>
-        </div>
-        <div className="gameMid"><div className="gameVs">VS</div></div>
-        <div className="gameSide">
-          <TeamBadge name={g.team_b} small />
-          <div className="gameScoreNum">{g.score_b != null ? g.score_b : '-'}</div>
-          <div className="gameHomeAway">主</div>
-        </div>
-      </div>
-
-      {g.actual_winner && (
-        <div className="actualLine top centeredActual">
-          真实结果：<b>{shortName(g.actual_winner)}</b>{(g.score_a != null && g.score_b != null) ? ` ${g.score_a} - ${g.score_b}` : ''}
-        </div>
+      {others.length > 0 ? (
+        <>
+          <button className="othersToggle" onClick={()=>setExpandedOthers(prev=>({...prev,[g.id]:!prev[g.id]}))}>
+            {opened ? '▾ 收起其他人预测' : '▸ 查看其他人预测'}
+          </button>
+          {opened && (
+            <div className="othersWrap">
+              {others.map(p=>{
+                const isCorrect = g.actual_winner && p.picked_winner===g.actual_winner
+                const isWrong = g.actual_winner && p.picked_winner!==g.actual_winner
+                return <div key={`${g.id}-${p.nickname}`} className={lineClass(false,isCorrect,isWrong)}>{p.nickname}：{shortName(p.picked_winner)}</div>
+              })}
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="muted compactMuted">还没有其他人预测</div>
       )}
-
-      <div className="pickButtons">
-        <button className="btn choice" onClick={()=>saveGamePick(g,g.team_a)}>客 {shortName(g.team_a)}</button>
-        <button className="btn choice" onClick={()=>saveGamePick(g,g.team_b)}>主 {shortName(g.team_b)}</button>
-      </div>
-
-      <div className="predictionBlock">
-        {allGamePicks.length===0 ? (
-          <div className="muted">还没人预测</div>
-        ) : (
-          allGamePicks.map(p=>{
-            const isMine = p.nickname===nickname
-            const isCorrect = g.actual_winner && p.picked_winner===g.actual_winner
-            const isWrong = g.actual_winner && p.picked_winner!==g.actual_winner
-            return (
-              <div key={`${g.id}-${p.nickname}`} className={lineClass(isMine,isCorrect,isWrong)}>
-                {p.nickname}{isMine?'（你）':''}：{shortName(p.picked_winner)}
-              </div>
-            )
-          })
-        )}
-      </div>
 
       {adminReady && (
         <div className="adminResultBox stacked">
-          <div className="miniLabel">管理员：本场结果</div>
+          <div className="row wrap" style={{marginBottom:8}}>
+            <button className="tiny subtle" onClick={()=>setEditingGameId(editingGameId===g.id?null:g.id)}>编辑本场</button>
+            <button className="tiny danger" onClick={()=>deleteGame(g)}>删除本场</button>
+          </div>
+
+          {editingGameId===g.id && (
+            <>
+              <div className="miniLabel">编辑本场</div>
+              <div className="editHint">左侧是客队，右侧是主队。</div>
+              <input value={g.label || ''} onChange={e=>setGames(prev=>prev.map(x=>x.id===g.id?{...x,label:e.target.value}:x))} placeholder="标签，比如 G1" />
+              <select value={g.team_a} onChange={e=>setGames(prev=>prev.map(x=>x.id===g.id?{...x,team_a:e.target.value}:x))}>
+                {Object.keys(TEAM_META).map(team=><option key={team} value={team}>客队（左）· {fullName(team)}</option>)}
+              </select>
+              <select value={g.team_b} onChange={e=>setGames(prev=>prev.map(x=>x.id===g.id?{...x,team_b:e.target.value}:x))}>
+                {Object.keys(TEAM_META).map(team=><option key={team} value={team}>主队（右）· {fullName(team)}</option>)}
+              </select>
+              <input type="datetime-local" value={toLocal(g.starts_at)} onChange={e=>setGames(prev=>prev.map(x=>x.id===g.id?{...x,starts_at:fromLocal(e.target.value)}:x))} />
+              <div className="row wrap">
+                <button className="tiny" onClick={()=>saveGameEdit(g)}>保存本场修改</button>
+                <button className="tiny subtle" onClick={()=>setEditingGameId(null)}>取消</button>
+              </div>
+            </>
+          )}
+
+          <div className="miniLabel" style={{marginTop:8}}>管理员：本场结果</div>
           <select value={gameResult.winner} onChange={e=>setGameResultState(prev=>({...prev,[g.id]:{...gameResult,winner:e.target.value}}))}>
             <option value={g.team_a}>{shortName(g.team_a)}</option>
             <option value={g.team_b}>{shortName(g.team_b)}</option>
