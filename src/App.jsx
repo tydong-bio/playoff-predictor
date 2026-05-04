@@ -467,10 +467,10 @@ export default function App(){
         return m.stage === 'Play-In'
       }
       if (stage === 'Round 1') {
-        return m.stage === 'Playoffs' && m.round_label === 'First Round' && m.conference === conference
+        return m.stage === 'Playoffs' && String(m.round_label || '').includes('First Round') && m.conference === conference
       }
       if (stage === 'Round 2') {
-        return m.stage === 'Playoffs' && m.round_label === 'Second Round' && m.conference === conference
+        return m.stage === 'Playoffs' && String(m.round_label || '').includes('Second Round') && m.conference === conference
       }
       return false
     })
