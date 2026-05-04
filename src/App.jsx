@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from './lib.supabase'
 
 const ADMIN_PASSWORD = 'nba-admin'
-const STAGES = ['Playoffs', 'Play-In']
+const STAGES = ['Second Round', 'First Round', 'Play-In']
 const CONFS = ['East', 'West']
 const SCORE_OPTIONS = ['4:0', '4:1', '4:2', '4:3']
 
@@ -158,7 +158,7 @@ export default function App(){
 
   const [pool,setPool] = useState(initialPool)
   const [nickname,setNickname] = useState(localStorage.getItem('pp_nickname') || '')
-  const [stage,setStage] = useState('Playoffs')
+  const [stage,setStage] = useState('Second Round')
   const [conference,setConference] = useState('East')
   const [msg,setMsg] = useState('')
   const [adminOpen,setAdminOpen] = useState(false)
@@ -442,7 +442,12 @@ export default function App(){
   }
 
   const visibleMatchups = useMemo(()=>{
-    const source = matchups.filter(m => stage==='Play-In' ? m.stage==='Play-In' : (m.stage==='Playoffs' && m.conference===conference))
+    const source = matchups.filter(m => {
+      if (stage === 'Play-In') return m.stage === 'Play-In'
+      if (stage === 'First Round') return m.stage === 'Playoffs' && m.conference === conference && (m.round_label || '').toLowerCase() === 'first round'
+      if (stage === 'Second Round') return m.stage === 'Playoffs' && m.conference === conference && (m.round_label || '').toLowerCase() === 'second round'
+      return false
+    })
     return sortByTime(source)
   },[matchups,stage,conference])
 
@@ -526,11 +531,11 @@ export default function App(){
           <div className="chipRow">
             {STAGES.map(s=>(
               <button key={s} className={`chip ${stage===s?'active':''}`} onClick={()=>setStage(s)}>
-                {s==='Play-In' ? '附加赛' : '季后赛'}
+                {s==='Play-In' ? '附加赛' : (s==='First Round' ? '第一轮' : '第二轮')}
               </button>
             ))}
           </div>
-          {stage==='Playoffs' && (
+          {stage!=='Play-In' && (
             <div className="chipRow secondRow">
               {CONFS.map(c=>(
                 <button key={c} className={`chip ${conference===c?'active':''}`} onClick={()=>setConference(c)}>
@@ -561,7 +566,7 @@ export default function App(){
               <div className="panelTitle">管理员</div>
               <div className="row wrap">
                 <button className="btn" onClick={seedPlayIn}>加入附加赛</button>
-                <button className="btn" onClick={seedPlayoffs}>加入季后赛占位</button>
+                <button className="btn" onClick={seedPlayoffs}>加入第一轮占位</button>
                 <button className="btn subtle" onClick={clearAllPredictions}>清空当前 pool 所有预测</button>
               </div>
 
