@@ -106,6 +106,14 @@ function fromDatetimeLocalValue(value){
   if(Number.isNaN(d.getTime())) return null
   return d.toISOString()
 }
+
+function isPredictionClosed(startsAt, actualWinner){
+  if (actualWinner) return true
+  if (!startsAt) return false
+  const t = new Date(startsAt).getTime()
+  if (Number.isNaN(t)) return false
+  return Date.now() >= t
+}
 function seriesScoreTextForDisplay(p, matchup){
   if(p.picked_score_a == null || p.picked_score_b == null) return ''
   if(p.picked_winner === matchup.team_a) return `${p.picked_score_a}:${p.picked_score_b}`
@@ -371,6 +379,7 @@ export default function App(){
 
   async function saveGamePick(game, winner, matchup){
     if(!nickname.trim()) return setMsg('先填昵称')
+    if (isPredictionClosed(game.starts_at, game.actual_winner)) return setMsg('该场比赛已截止预测')
     const { error } = await supabase.from('game_picks').upsert({
       pool, game_id:game.id, nickname:nickname.trim(), picked_winner:winner
     }, { onConflict:'pool,game_id,nickname' })
@@ -388,6 +397,7 @@ export default function App(){
 
   async function saveSeriesWinnerOnly(matchup, winner){
     if(!nickname.trim()) return setMsg('先填昵称')
+    if (isPredictionClosed(matchup.starts_at, matchup.actual_winner)) return setMsg('该系列赛已截止预测')
     const draft = getSeriesDraft(matchup)
     setSeriesDrafts(prev=>({...prev,[matchup.matchup_id]:{winner,score:draft.winner===winner?draft.score:''}}))
     const { error } = await supabase.from('series_picks').upsert({
@@ -401,6 +411,7 @@ export default function App(){
 
   async function saveSeriesExactScore(matchup, score){
     if(!nickname.trim()) return setMsg('先填昵称')
+    if (isPredictionClosed(matchup.starts_at, matchup.actual_winner)) return setMsg('该系列赛已截止预测')
     const draft = getSeriesDraft(matchup)
     if(!draft.winner) return setMsg('先选谁晋级')
     const parsed = parseSeriesScoreForWinner(draft.winner, score, matchup.team_a, matchup.team_b)
@@ -525,7 +536,7 @@ export default function App(){
     <div className="page">
       {easterEgg && <div className="eggToast">{easterEgg}</div>}
       <div className="container">
-        <div className="siteBanner">火箭加油 · KD加油</div>
+        <div className="siteBanner">火箭加油</div>
         <header className="header">
           <div className="brand">
             <div className="kicker">NBA PREDICTOR</div>
@@ -710,10 +721,10 @@ export default function App(){
                       <div className="seriesPickTitle">大场预测</div>
                       <div className="seriesPickHint">你觉得谁会赢下这个系列赛？</div>
                       <div className="pickButtons">
-                        <button className={`btn choice ${draft.winner===m.team_a?'selected':''}`} onClick={()=>saveSeriesWinnerOnly(m,m.team_a)}>
+                        <button className={`btn choice ${draft.winner===m.team_a?'selected':''}`} disabled={isPredictionClosed(m.starts_at, m.actual_winner)} onClick={()=>saveSeriesWinnerOnly(m,m.team_a)}>
                           {shortName(m.team_a)}晋级
                         </button>
-                        <button className={`btn choice ${draft.winner===m.team_b?'selected':''}`} onClick={()=>saveSeriesWinnerOnly(m,m.team_b)}>
+                        <button className={`btn choice ${draft.winner===m.team_b?'selected':''}`} disabled={isPredictionClosed(m.starts_at, m.actual_winner)} onClick={()=>saveSeriesWinnerOnly(m,m.team_b)}>
                           {shortName(m.team_b)}晋级
                         </button>
                       </div>
@@ -721,7 +732,7 @@ export default function App(){
                       <div className="seriesPickHint">如果你还想猜具体大比分：</div>
                       <div className="pickButtons">
                         {SCORE_OPTIONS.map(score=>(
-                          <button key={`${m.matchup_id}-${score}`} className={`btn choice ${draft.score===score?'selected':''}`} onClick={()=>saveSeriesExactScore(m,score)}>
+                          <button key={`${m.matchup_id}-${score}`} className={`btn choice ${draft.score===score?'selected':''}`} disabled={isPredictionClosed(m.starts_at, m.actual_winner)} onClick={()=>saveSeriesExactScore(m,score)}>
                             {score}
                           </button>
                         ))}
@@ -844,6 +855,7 @@ function GameCard({
   const myPick = allGamePicks.find(p => p.nickname === nickname)
   const others = allGamePicks.filter(p => p.nickname !== nickname)
   const opened = !!expandedOthers[g.id]
+  const predictionClosed = isPredictionClosed(g.starts_at, g.actual_winner)
 
   return (
     <div className="gameCard compactGame">
@@ -862,10 +874,11 @@ function GameCard({
 
       {!g.actual_winner && (
         <div className="pickButtons compactButtons">
-          <button className="btn choice" onClick={()=>saveGamePick(g,g.team_a,matchup)}>客 {shortName(g.team_a)}</button>
-          <button className="btn choice" onClick={()=>saveGamePick(g,g.team_b,matchup)}>主 {shortName(g.team_b)}</button>
+          <button className="btn choice" disabled={predictionClosed} onClick={()=>saveGamePick(g,g.team_a,matchup)}>客 {shortName(g.team_a)}</button>
+          <button className="btn choice" disabled={predictionClosed} onClick={()=>saveGamePick(g,g.team_b,matchup)}>主 {shortName(g.team_b)}</button>
         </div>
       )}
+      {predictionClosed && !g.actual_winner && <div className="compactMuted">该场比赛已截止预测</div>}
 
       {others.length > 0 ? (
         <>
@@ -904,7 +917,7 @@ function GameCard({
               <select value={g.team_b} onChange={e=>setGames(prev=>prev.map(x=>x.id===g.id?{...x,team_b:e.target.value}:x))}>
                 {Object.keys(TEAM_META).map(team=><option key={team} value={team}>主队（右）· {fullName(team)}</option>)}
               </select>
-              <input type="datetime-local" value={toLocal(g.starts_at)} onChange={e=>setGames(prev=>prev.map(x=>x.id===g.id?{...x,starts_at:fromLocal(e.target.value)}:x))} />
+              <input type="datetime-local" value={toDatetimeLocalValue(g.starts_at)} onChange={e=>setGames(prev=>prev.map(x=>x.id===g.id?{...x,starts_at:fromDatetimeLocalValue(e.target.value)}:x))} />
               <div className="row wrap">
                 <button className="tiny" onClick={()=>saveGameEdit(g)}>保存本场修改</button>
                 <button className="tiny subtle" onClick={()=>setEditingGameId(null)}>取消</button>
