@@ -525,7 +525,7 @@ export default function App(){
         if(m.actual_score_a != null && m.actual_score_b != null){
           const display = seriesScoreTextForDisplay(p,m)
           const actual = m.actual_winner===m.team_a ? `${m.actual_score_a}:${m.actual_score_b}` : `${m.actual_score_b}:${m.actual_score_a}`
-          if(display === actual) add(p.nickname,5)
+          if(display === actual) add(p.nickname,3)
         }
       }
     })
