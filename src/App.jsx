@@ -114,6 +114,15 @@ function isPredictionClosed(startsAt, actualWinner){
   if (Number.isNaN(t)) return false
   return Date.now() >= t
 }
+function isSeriesPredictionClosed(matchup, gamesByMatchup){
+  if (matchup.actual_winner) return true
+  const matchupGames = gamesByMatchup[matchup.matchup_id] || []
+  const g1 = matchupGames.find(g => g.game_no === 1 || g.label === 'G1')
+  if (!g1?.starts_at) return false
+  const t = new Date(g1.starts_at).getTime()
+  if (Number.isNaN(t)) return false
+  return Date.now() >= t
+}
 function seriesScoreTextForDisplay(p, matchup){
   if(p.picked_score_a == null || p.picked_score_b == null) return ''
   if(p.picked_winner === matchup.team_a) return `${p.picked_score_a}:${p.picked_score_b}`
@@ -397,7 +406,7 @@ export default function App(){
 
   async function saveSeriesWinnerOnly(matchup, winner){
     if(!nickname.trim()) return setMsg('先填昵称')
-    if (isPredictionClosed(matchup.starts_at, matchup.actual_winner)) return setMsg('该系列赛已截止预测')
+    if (isSeriesPredictionClosed(matchup, gamesByMatchup)) return setMsg('G1 已开始，不能再修改大场预测')
     const draft = getSeriesDraft(matchup)
     setSeriesDrafts(prev=>({...prev,[matchup.matchup_id]:{winner,score:draft.winner===winner?draft.score:''}}))
     const { error } = await supabase.from('series_picks').upsert({
@@ -411,7 +420,7 @@ export default function App(){
 
   async function saveSeriesExactScore(matchup, score){
     if(!nickname.trim()) return setMsg('先填昵称')
-    if (isPredictionClosed(matchup.starts_at, matchup.actual_winner)) return setMsg('该系列赛已截止预测')
+    if (isSeriesPredictionClosed(matchup, gamesByMatchup)) return setMsg('G1 已开始，不能再修改大场预测')
     const draft = getSeriesDraft(matchup)
     if(!draft.winner) return setMsg('先选谁晋级')
     const parsed = parseSeriesScoreForWinner(draft.winner, score, matchup.team_a, matchup.team_b)
@@ -536,7 +545,6 @@ export default function App(){
     <div className="page">
       {easterEgg && <div className="eggToast">{easterEgg}</div>}
       <div className="container">
-        <div className="siteBanner">火箭加油</div>
         <header className="header">
           <div className="brand">
             <div className="kicker">NBA PREDICTOR</div>
@@ -721,10 +729,10 @@ export default function App(){
                       <div className="seriesPickTitle">大场预测</div>
                       <div className="seriesPickHint">你觉得谁会赢下这个系列赛？</div>
                       <div className="pickButtons">
-                        <button className={`btn choice ${draft.winner===m.team_a?'selected':''}`} disabled={isPredictionClosed(m.starts_at, m.actual_winner)} onClick={()=>saveSeriesWinnerOnly(m,m.team_a)}>
+                        <button className={`btn choice ${draft.winner===m.team_a?'selected':''}`} disabled={isSeriesPredictionClosed(m, gamesByMatchup)} onClick={()=>saveSeriesWinnerOnly(m,m.team_a)}>
                           {shortName(m.team_a)}晋级
                         </button>
-                        <button className={`btn choice ${draft.winner===m.team_b?'selected':''}`} disabled={isPredictionClosed(m.starts_at, m.actual_winner)} onClick={()=>saveSeriesWinnerOnly(m,m.team_b)}>
+                        <button className={`btn choice ${draft.winner===m.team_b?'selected':''}`} disabled={isSeriesPredictionClosed(m, gamesByMatchup)} onClick={()=>saveSeriesWinnerOnly(m,m.team_b)}>
                           {shortName(m.team_b)}晋级
                         </button>
                       </div>
@@ -732,7 +740,7 @@ export default function App(){
                       <div className="seriesPickHint">如果你还想猜具体大比分：</div>
                       <div className="pickButtons">
                         {SCORE_OPTIONS.map(score=>(
-                          <button key={`${m.matchup_id}-${score}`} className={`btn choice ${draft.score===score?'selected':''}`} disabled={isPredictionClosed(m.starts_at, m.actual_winner)} onClick={()=>saveSeriesExactScore(m,score)}>
+                          <button key={`${m.matchup_id}-${score}`} className={`btn choice ${draft.score===score?'selected':''}`} disabled={isSeriesPredictionClosed(m, gamesByMatchup)} onClick={()=>saveSeriesExactScore(m,score)}>
                             {score}
                           </button>
                         ))}
