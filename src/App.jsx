@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from './lib.supabase'
 
 const ADMIN_PASSWORD = 'nba-admin'
-const STAGES = ['Round 2', 'Round 1', 'Play-In']
+const STAGES = ['Conference Finals', 'Round 2', 'Round 1', 'Play-In']
 const CONFS = ['East', 'West']
 const SCORE_OPTIONS = ['4:0', '4:1', '4:2', '4:3']
 
@@ -176,7 +176,7 @@ export default function App(){
 
   const [pool,setPool] = useState(initialPool)
   const [nickname,setNickname] = useState(localStorage.getItem('pp_nickname') || '')
-  const [stage,setStage] = useState('Round 2')
+  const [stage,setStage] = useState('Conference Finals')
   const [conference,setConference] = useState('East')
   const [msg,setMsg] = useState('')
   const [adminOpen,setAdminOpen] = useState(false)
@@ -492,6 +492,13 @@ export default function App(){
       if (stage === 'Round 2') {
         return m.stage === 'Playoffs' && String(m.round_label || '').includes('Second Round') && m.conference === conference
       }
+      if (stage === 'Conference Finals') {
+        return m.stage === 'Playoffs' && (
+          String(m.round_label || '').includes('Conference Finals') ||
+          String(m.round_label || '').includes('Conf Finals') ||
+          String(m.round_label || '').includes('Finals')
+        ) && m.conference === conference
+      }
       return false
     })
     return sortByTime(source)
@@ -578,11 +585,11 @@ export default function App(){
           <div className="chipRow">
             {STAGES.map(s=>(
               <button key={s} className={`chip ${stage===s?'active':''}`} onClick={()=>setStage(s)}>
-                {s==='Round 2' ? '第二轮' : s==='Round 1' ? '第一轮' : '附加赛'}
+                {s==='Conference Finals' ? '分区决赛' : s==='Round 2' ? '第二轮' : s==='Round 1' ? '第一轮' : '附加赛'}
               </button>
             ))}
           </div>
-          {(stage==='Round 1' || stage==='Round 2') && (
+          {(stage==='Round 1' || stage==='Round 2' || stage==='Conference Finals') && (
             <div className="chipRow secondRow">
               {CONFS.map(c=>(
                 <button key={c} className={`chip ${conference===c?'active':''}`} onClick={()=>setConference(c)}>
