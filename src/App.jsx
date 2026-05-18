@@ -497,7 +497,7 @@ export default function App(){
           String(m.round_label || '').includes('Conference Finals') ||
           String(m.round_label || '').includes('Conf Finals') ||
           String(m.round_label || '').includes('Finals')
-        ) && m.conference === conference
+        )
       }
       return false
     })
@@ -589,7 +589,7 @@ export default function App(){
               </button>
             ))}
           </div>
-          {(stage==='Round 1' || stage==='Round 2' || stage==='Conference Finals') && (
+          {(stage==='Round 1' || stage==='Round 2') && (
             <div className="chipRow secondRow">
               {CONFS.map(c=>(
                 <button key={c} className={`chip ${conference===c?'active':''}`} onClick={()=>setConference(c)}>
@@ -674,7 +674,13 @@ export default function App(){
               <article className="card" key={m.id}>
                 <div className="cardHead">
                   <div className="fullWidth">
-                    <div className="meta">{m.stage==='Play-In' ? `附加赛 · ${m.round_label}` : `季后赛 · ${m.conference} · ${m.round_label}`}</div>
+                    <div className="meta">
+                      {m.stage==='Play-In'
+                        ? `附加赛 · ${m.round_label}`
+                        : stage==='Conference Finals'
+                          ? `分区决赛 · ${m.round_label}`
+                          : `季后赛 · ${m.conference} · ${m.round_label}`}
+                    </div>
 
                     {m.matchup_type==='series' ? (
                       <>
