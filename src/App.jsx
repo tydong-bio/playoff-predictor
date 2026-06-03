@@ -495,13 +495,15 @@ export default function App(){
       }
       if (stage === 'Conference Finals') {
         return m.stage === 'Playoffs' && (
-          label.includes('Conference Finals') || label.includes('Conf Finals')
+          label.includes('Conference Finals') ||
+          label.includes('Conf Finals')
         )
       }
       if (stage === 'Finals') {
         return m.stage === 'Playoffs' && (
-          label.includes('NBA Finals') || label.includes('Finals')
-        ) && !label.includes('Conference Finals') && !label.includes('Conf Finals')
+          label.includes('NBA Finals') ||
+          (label.includes('Finals') && !label.includes('Conference'))
+        )
       }
       return false
     })
@@ -554,53 +556,8 @@ export default function App(){
 
   return (
     <div className="page">
-      <style>{`
-        .finalsHero{
-          position:relative;
-          overflow:hidden;
-          margin:0 0 16px;
-          padding:18px 18px 16px;
-          border-radius:20px;
-          background:
-            radial-gradient(circle at top left, rgba(255,255,255,.18), transparent 30%),
-            radial-gradient(circle at bottom right, rgba(255,255,255,.14), transparent 28%),
-            linear-gradient(135deg, #111827 0%, #7c2d12 35%, #d97706 70%, #fbbf24 100%);
-          color:#fff;
-          box-shadow:0 16px 36px rgba(0,0,0,.16);
-        }
-        .finalsHero::after{
-          content:'';
-          position:absolute;
-          inset:-40% auto auto 55%;
-          width:240px;
-          height:240px;
-          background:radial-gradient(circle, rgba(255,255,255,.18), transparent 65%);
-          transform:translateX(-50%);
-          pointer-events:none;
-        }
-        .finalsKicker{font-size:12px;letter-spacing:.14em;font-weight:800;opacity:.85;margin-bottom:6px}
-        .finalsTitle{font-size:34px;line-height:1;margin:0 0 8px;font-weight:900}
-        .finalsSub{font-size:15px;opacity:.92}
-        .finalsBadge{display:inline-flex;align-items:center;gap:8px;margin-top:12px;padding:7px 11px;border-radius:999px;background:rgba(255,255,255,.14);backdrop-filter:blur(4px);font-weight:700}
-        .goldChip{box-shadow:0 0 0 1px rgba(255,255,255,.14) inset}
-        .finalsCard{border-color:#f59e0b; box-shadow:0 8px 24px rgba(245,158,11,.12)}
-        .finalsVsBig{font-size:22px;color:#fbbf24;font-weight:900;letter-spacing:.08em}
-        .finalsStand{font-size:24px;color:#fbbf24;font-weight:800}
-        @media (max-width:700px){
-          .finalsTitle{font-size:28px}
-          .finalsSub{font-size:14px}
-        }
-      `}</style>
       {easterEgg && <div className="eggToast">{easterEgg}</div>}
       <div className="container">
-        {stage==='Finals' && (
-          <section className="finalsHero">
-            <div className="finalsKicker">NBA FINALS</div>
-            <h2 className="finalsTitle">总决赛</h2>
-            <div className="finalsSub">最后一轮，最后两队，最后的冠军争夺。</div>
-            <div className="finalsBadge goldChip">🏆 O’Brien Trophy Mode</div>
-          </section>
-        )}
         <header className="header">
           <div className="brand">
             <div className="kicker">NBA PREDICTOR</div>
@@ -720,7 +677,7 @@ export default function App(){
             const seriesResult = seriesResultState[m.matchup_id] || { winner:m.actual_winner || m.team_a, score:'4:2' }
 
             return (
-              <article className={`card ${stage==="Finals" ? "finalsCard" : ""}`} key={m.id}>
+              <article className="card" key={m.id}>
                 <div className="cardHead">
                   <div className="fullWidth">
                     <div className="meta">
@@ -738,12 +695,12 @@ export default function App(){
                         <div className="seriesHeaderCenter">
                           <div className="seriesTeamCol">
                             <TeamBadge name={m.team_a} />
-                            <div className={stage==="Finals" ? "finalsStand" : "seriesStanding"}>{standing.awayWins}</div>
+                            <div className="seriesStanding">{standing.awayWins}</div>
                           </div>
-                          <div className={stage==="Finals" ? "finalsVsBig" : "seriesVsBig"}>VS</div>
+                          <div className="seriesVsBig">VS</div>
                           <div className="seriesTeamCol">
                             <TeamBadge name={m.team_b} />
-                            <div className={stage==="Finals" ? "finalsStand" : "seriesStanding"}>{standing.homeWins}</div>
+                            <div className="seriesStanding">{standing.homeWins}</div>
                           </div>
                         </div>
                         <div className="time centeredTime">{fmt(m.starts_at)}</div>
