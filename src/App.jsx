@@ -81,7 +81,7 @@ function TeamBadge({ name, small=false }) {
   const logo = teamLogo(name)
   return (
     <span className={`teamBadge ${small ? 'small' : ''}`}>
-      {logo ? <img src={logo} alt={name} className={`teamLogo ${name === 'Rockets' ? 'rocketsLogo' : ''}`} /> : <span className="teamLogoPlaceholder" />}
+      {logo ? <img src={logo} alt={name} className={`teamLogo ${name === 'Spurs' ? 'spursLogo' : name === 'Knicks' ? 'knicksLogo' : ''}`} /> : <span className="teamLogoPlaceholder" />}
       <span>{fullName(name)}</span>
     </span>
   )
@@ -242,9 +242,9 @@ export default function App(){
 
 
   function triggerEgg(team, matchup){
-    if (!isRocketsLakersSeries(matchup)) return
-    if (team === 'Rockets') setEasterEgg('🚀 火箭升空')
-    if (team === 'Lakers') setEasterEgg('👑 湖人加冕')
+    if (!isFinalsShowcase(matchup)) return
+    if (team === 'Spurs') setEasterEgg('🛸 文班制空')
+    if (team === 'Knicks') setEasterEgg('🗽 布伦森接管')
   }
 
   async function seedPlayIn(){
@@ -484,27 +484,11 @@ export default function App(){
   const visibleMatchups = useMemo(()=>{
     const source = matchups.filter(m => {
       const label = String(m.round_label || '')
-      if (stage === 'Play-In') {
-        return m.stage === 'Play-In'
-      }
-      if (stage === 'Round 1') {
-        return m.stage === 'Playoffs' && label.includes('First Round') && m.conference === conference
-      }
-      if (stage === 'Round 2') {
-        return m.stage === 'Playoffs' && label.includes('Second Round') && m.conference === conference
-      }
-      if (stage === 'Conference Finals') {
-        return m.stage === 'Playoffs' && (
-          label.includes('Conference Finals') ||
-          label.includes('Conf Finals')
-        )
-      }
-      if (stage === 'Finals') {
-        return m.stage === 'Playoffs' && (
-          label.includes('NBA Finals') ||
-          (label.includes('Finals') && !label.includes('Conference'))
-        )
-      }
+      if (stage === 'Play-In') return m.stage === 'Play-In'
+      if (stage === 'Round 1') return m.stage === 'Playoffs' && label.includes('First Round') && m.conference === conference
+      if (stage === 'Round 2') return m.stage === 'Playoffs' && label.includes('Second Round') && m.conference === conference
+      if (stage === 'Conference Finals') return m.stage === 'Playoffs' && (label.includes('Conference Finals') || label.includes('Conf Finals'))
+      if (stage === 'Finals') return m.stage === 'Playoffs' && (label.includes('NBA Finals') || (label.includes('Finals') && !label.includes('Conference')))
       return false
     })
     return sortByTime(source)
@@ -556,8 +540,44 @@ export default function App(){
 
   return (
     <div className="page">
+      <style>{`
+        .spursLogo{filter:drop-shadow(0 0 8px rgba(229,231,235,.75)); animation:spursGlow 2s ease-in-out infinite;}
+        .knicksLogo{filter:drop-shadow(0 0 8px rgba(249,115,22,.45)); animation:knicksGlow 2s ease-in-out infinite;}
+        @keyframes spursGlow{0%,100%{filter:drop-shadow(0 0 5px rgba(229,231,235,.35))}50%{filter:drop-shadow(0 0 13px rgba(255,255,255,.95))}}
+        @keyframes knicksGlow{0%,100%{filter:drop-shadow(0 0 5px rgba(59,130,246,.35))}50%{filter:drop-shadow(0 0 14px rgba(249,115,22,.95))}}
+        .eggToast{position:fixed;right:16px;bottom:18px;z-index:99;background:#111827;color:#fff;padding:12px 16px;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.25);font-weight:700;animation:eggPop .18s ease-out}
+        @keyframes eggPop{from{transform:translateY(8px);opacity:0}to{transform:translateY(0);opacity:1}}
+        .finalsHero{margin:0 0 16px;padding:20px 18px;border-radius:24px;background:radial-gradient(circle at 20% 20%, rgba(255,255,255,.18), transparent 25%),radial-gradient(circle at 80% 20%, rgba(245,158,11,.18), transparent 25%),linear-gradient(135deg,#0b0b0f 0%, #1f2937 45%, #111827 100%);color:#fff;border:1px solid rgba(245,158,11,.32); box-shadow:0 18px 48px rgba(0,0,0,.22);}
+        .finalsHeroTop{font-size:12px;letter-spacing:.2em;color:#fbbf24;font-weight:800;margin-bottom:10px}
+        .finalsHeroMain{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px}
+        .finalsHeroSide{padding:10px 12px;border-radius:18px;background:rgba(255,255,255,.04);backdrop-filter: blur(4px);}
+        .finalsHeroName{font-size:28px;font-weight:800;line-height:1.05}
+        .finalsHeroTag{margin-top:8px;color:#d1d5db;font-size:13px}
+        .finalsHeroVs{font-size:28px;font-weight:900;color:#fbbf24;text-shadow:0 0 18px rgba(251,191,36,.45)}
+        .spursSide{border:1px solid rgba(229,231,235,.18)}
+        .knicksSide{border:1px solid rgba(249,115,22,.2)}
+        .finalsCard{border-color:#fbbf24!important; box-shadow:0 12px 36px rgba(251,191,36,.12), 0 4px 14px rgba(0,0,0,.04)!important}
+        .finalsMetaAccent{color:#f59e0b!important;font-weight:700}
+        @media (max-width:700px){.finalsHero{padding:16px 14px}.finalsHeroMain{grid-template-columns:1fr;gap:10px}.finalsHeroVs{text-align:center;font-size:22px}.finalsHeroName{font-size:24px}}
+      `}</style>
       {easterEgg && <div className="eggToast">{easterEgg}</div>}
       <div className="container">
+        {stage==='Finals' && visibleMatchups[0] && (
+          <section className="finalsHero">
+            <div className="finalsHeroTop">🏆 NBA FINALS</div>
+            <div className="finalsHeroMain">
+              <div className="finalsHeroSide spursSide">
+                <div className="finalsHeroName">{fullName(visibleMatchups[0].team_a)}</div>
+                <div className="finalsHeroTag">Wemby vs Brunson</div>
+              </div>
+              <div className="finalsHeroVs">VS</div>
+              <div className="finalsHeroSide knicksSide">
+                <div className="finalsHeroName">{fullName(visibleMatchups[0].team_b)}</div>
+                <div className="finalsHeroTag">冠军之战</div>
+              </div>
+            </div>
+          </section>
+        )}
         <header className="header">
           <div className="brand">
             <div className="kicker">NBA PREDICTOR</div>
@@ -677,10 +697,10 @@ export default function App(){
             const seriesResult = seriesResultState[m.matchup_id] || { winner:m.actual_winner || m.team_a, score:'4:2' }
 
             return (
-              <article className="card" key={m.id}>
+              <article className={`card ${stage==='Finals' ? 'finalsCard' : ''}`} key={m.id}>
                 <div className="cardHead">
                   <div className="fullWidth">
-                    <div className="meta">
+                    <div className={stage==='Finals' ? 'meta finalsMetaAccent' : 'meta'}>
                       {m.stage==='Play-In'
                         ? `附加赛 · ${m.round_label}`
                         : stage==='Finals'
